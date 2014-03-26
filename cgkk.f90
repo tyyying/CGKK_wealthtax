@@ -27,7 +27,7 @@ USE nrtype
 	! grid size
 	INTEGER(I4B),  PARAMETER  :: ne=5        ! labor idiosyncratic shocks
 	INTEGER(I4B),  PARAMETER  :: ne_alpha=5  ! labor efficiency fixed effect
-	INTEGER(I4B),  PARAMETER  :: nz=1        ! inv ability fixed component
+	INTEGER(I4B),  PARAMETER  :: nz=7        ! inv ability fixed component
 	INTEGER(I4B),  PARAMETER  :: nm=1        ! inv ability idiosyncratic shocks over lifecycle
 	INTEGER(I4B),  PARAMETER  :: ns=nz*ne_alpha*ne*nm
 	REAL(DP),      PARAMETER  :: tauchen_m_z=3.0_DP ! how many std away from mean in tauchen
@@ -411,7 +411,7 @@ IMPLICIT NONE
 	! labor transitional matrices
 	!----------------------------------------------
 	IF (ne<2) THEN
-		egrid = 0.0_DP
+		egrid=0.0_DP
 		Dist_e=1.0_DP
 		pr_e=1.0_DP
 	ELSE
@@ -527,11 +527,12 @@ IMPLICIT NONE
 	
 	!----------------------------------------------
 	! Calculating Nbar (exogenous, labor supply inelastic)
+	! Agents supply labor up to (including) age ReAge-1 (no work >= ReAge)
 	!----------------------------------------------
 	Nbar_bench=0.0_DP
 	DO ei=1,ne
 		DO alphai=1,ne_alpha
-			DO age=1,min(maxAge,ReAge)
+			DO age=1,min(maxAge,ReAge-1)
 				Nbar_bench=Nbar_bench+egrid(ei)*exp(e_alpha(alphai)+e_kappa(age))* &
 					& Dist_e(ei)*Dist_alpha(alphai)*size_by_age(age)
 			END DO
@@ -593,14 +594,13 @@ IMPLICIT NONE
 	END DO
 
 	!----------------------------------------------
-	! Initilize the simulation panel
+	! Initilize the simulation panel for newborns
 	!----------------------------------------------
 
 	allocate( panel_z(panelN), panel_m(panelN), panel_alpha(panelN), panel_e(panelN) ) 
 	allocate( rn(panelN), rn_index(panelN), rn_rank(panelN) )
-	
-	panel_z=0 ! use panel_z to keep track whether alive. if not alive, panel_z=0
-	panel_z=nz/2
+
+	panel_z=max(2,nz)/2 ! if nz=1,panel_z=1, if nz>1, take floor(nz/2)
 	FORALL (i=1:size_by_age_z(1,1)) panel_z(i)=1
 	DO zi=2,nz
 		DO i=sum(size_by_age_z(1,1:zi-1))+1,sum(size_by_age_z(1,1:zi))
@@ -748,7 +748,21 @@ IMPLICIT NONE
 		WRITE (UNIT=1, FMT=*) e_kappa(age)
 	END DO
 	CLOSE (UNIT=1)
-    
+ 
+	OPEN (UNIT=1, FILE='size_by_age', STATUS='replace')
+	DO age=1,maxAge
+		WRITE (UNIT=1, FMT=*) size_by_age(age)
+	END DO
+	CLOSE (UNIT=1)
+	
+	OPEN (UNIT=1, FILE='size_by_age_z', STATUS='replace')
+	DO age=1,maxAge
+		DO zi=1,nz
+			WRITE (UNIT=1, FMT=*) size_by_age_z(age,zi)
+		END DO
+	END DO
+	CLOSE (UNIT=1)
+	  
 	OPEN (UNIT=1, FILE='param_list', STATUS='replace')
 	WRITE (UNIT=1,FMT=*) 'maxAge              ', maxAge
 	WRITE (UNIT=1,FMT=*) 'ReAge               ', ReAge
@@ -1205,6 +1219,7 @@ IMPLICIT NONE
 			panel_Q_seq(iter_panel)=(panel_Q_seq(iter_panel)**(1.0_DP/rho))/REAL(i,DP)
 			panel_wealth_seq(iter_panel)=sum(panel_a*real(min(1,panel_age),dp))/REAL(i,DP)
 			panel_xmax_seq(iter_panel)=maxval(panel_x)
+			panel_N_seq(iter_panel)=panel_N_seq(iter_panel)/REAL(i,DP)
 ! 			print*,iter_panel,panel_Q_seq(iter_panel),i
 	
 			IF (iter_panel>=maxiter_panel-numiter_fin_panel+1) THEN ! recording the last numiter_fin_panel rounds in simulation
