@@ -26,7 +26,7 @@ USE nrtype
 	
 	! grid size
 	INTEGER(I4B),  PARAMETER  :: ne=5        ! labor idiosyncratic shocks
-	INTEGER(I4B),  PARAMETER  :: ne_alpha=1  ! labor efficiency fixed effect
+	INTEGER(I4B),  PARAMETER  :: ne_alpha=5  ! labor efficiency fixed effect
 	INTEGER(I4B),  PARAMETER  :: nz=1        ! inv ability fixed component
 	INTEGER(I4B),  PARAMETER  :: nm=1        ! inv ability idiosyncratic shocks over lifecycle
 	INTEGER(I4B),  PARAMETER  :: ns=nz*ne_alpha*ne*nm
@@ -468,16 +468,18 @@ IMPLICIT NONE
 	!----------------------------------------------
 	FORALL (age=1:maxAge) size_by_age(age)=INT((pop(age)/pop(1)*REAL(panelN,DP)))
 	FORALL (zi=1:nz,age=1:maxAge) size_by_age_z(age,zi)=INT(Dist_z(zi)*REAL(size_by_age(age),DP))
+	
 	! the following deals with population accounting issues
-	size_by_age_z(1,nz/2)=size_by_age_z(1,nz/2)+size_by_age(1)-sum(size_by_age_z(1,:))
+	! edited (3/26/2014), change nz to max(2,nz) so it works for nz=1 case (no z shock)
+	size_by_age_z(1,max(2,nz)/2)=size_by_age_z(1,max(2,nz)/2)+size_by_age(1)-sum(size_by_age_z(1,:))
 	DO age=2,maxAge	
-		DO zi=nz/2,1,-1 ! first downward allocate extra people
+		DO zi=max(2,nz)/2,1,-1 ! first downward allocate extra people
 			size_by_age_z(age,zi)=min(size_by_age_z(age-1,zi),size_by_age_z(age,zi)+size_by_age(age)-sum(size_by_age_z(age,:)))
 			IF (size_by_age(age) .eq. sum(size_by_age_z(age,:))) THEN
 				EXIT
 			END IF
 		END DO
-		DO zi=nz/2+1,nz ! if still not enough, upward allocate
+		DO zi=max(2,nz)/2+1,nz ! if still not enough, upward allocate
 			size_by_age_z(age,zi)=min(size_by_age_z(age-1,zi),size_by_age_z(age,zi)+size_by_age(age)-sum(size_by_age_z(age,:)))
 			IF (size_by_age(age) .eq. sum(size_by_age_z(age,:))) THEN
 				EXIT
@@ -800,7 +802,7 @@ IMPLICIT NONE
 	INTEGER(I4B),DIMENSION(2) :: xlim
 	REAL(DP),    DIMENSION(2) :: ab
 
-	REAL(DP), DIMENSION(maxiter_panel) :: panel_Q_seq, panel_wealth_seq, panel_xmax_seq, panel_nbar_seq
+	REAL(DP), DIMENSION(maxiter_panel) :: panel_Q_seq, panel_wealth_seq, panel_xmax_seq, panel_N_seq
 	INTEGER(I4B),  DIMENSION(panelN,maxAge) :: panel_s, panel_age
 	REAL(DP),      DIMENSION(panelN,maxAge) :: panel_a, panel_x
 	INTEGER(I4B),  DIMENSION(panelN) :: panel_alpha_end, panel_z0
@@ -1173,6 +1175,7 @@ IMPLICIT NONE
 	
 			i=0
 			panel_Q_seq(iter_panel)=0.0_DP
+			panel_N_seq(iter_panel)=0.0_DP
 			panel_x=0.0_dp
 			DO row=1,panelN
 				DO age=1,maxAge
@@ -1180,6 +1183,8 @@ IMPLICIT NONE
 						i=i+1
 						panel_z_ind=sz(panel_s(row,age))
 						panel_m_ind=sm(panel_s(row,age))
+						panel_e_ind=se(panel_s(row,age))
+						panel_alpha_ind=salpha(panel_s(row,age))
 						IF (panel_a(row,age)>0.0_dp) THEN ! this if statement avoid program crashing when panel_a=0
 !							IF (age<ReAge) THEN
 								panel_Q_seq(iter_panel)=panel_Q_seq(iter_panel)+ &
@@ -1188,6 +1193,11 @@ IMPLICIT NONE
 !							ELSE
 !								panel_Q_seq(iter_panel)=panel_Q_seq(iter_panel)+(z_med*panel_a(row,age))**rho
 !							END IF
+						END IF
+						
+						IF (age<ReAge) THEN
+							panel_N_seq(iter_panel)=panel_N_seq(iter_panel)+ &
+								& egrid(panel_e_ind)*exp(e_alpha(panel_alpha_ind)+e_kappa(age))
 						END IF
 					END IF
 				END DO
@@ -1295,7 +1305,7 @@ IMPLICIT NONE
 		END IF
 		!=======================================================
 
-		print*,'Q=' , Q,'Q_new=' , Q_new,'minQ=',minQ, 'maxQ=',maxQ, 'max x', panel_xmax_seq(maxiter_panel)
+		print*,'Q=' , Q,'Q_new=' , Q_new,'minQ=',minQ, 'maxQ=',maxQ, 'panel_N', panel_N_seq(maxiter_panel),Nbar
 		
 		Q_new  = (maxQ+minQ)/2.0_DP
 		rr_new = rr_coef*(Q_new**(alpha-rho))
@@ -1391,6 +1401,12 @@ IMPLICIT NONE
 		END DO
 		CLOSE (UNIT=1)
 
+		OPEN (UNIT=1, FILE='N_seq_bench', STATUS='replace')
+		DO iter=1,maxiter_panel
+			WRITE (UNIT=1, FMT=*) panel_N_seq(iter)
+		END DO
+		CLOSE (UNIT=1)
+		
 		OPEN (UNIT=1, FILE='wealth_seq_bench', STATUS='replace')
 		DO iter=1,maxiter_panel
 			WRITE (UNIT=1, FMT=*) panel_wealth_seq(iter)
