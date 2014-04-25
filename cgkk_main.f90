@@ -73,7 +73,7 @@ IMPLICIT NONE
 	DO WHILE (Gbar_exp<Gbar_bench)
 		CALL solveequilibrium(0,tauk_exp,tauw0,taul0,isbrent)
 		print*, '-------------------------------------------------'
-		print*, 'tauw0', tauw0,' Gbar_exp',Gbar_exp
+		print*, 'tauw0', tauw0,' Gbar_bench',Gbar_bench,' Gbar_exp',Gbar_exp
 		print*, '-------------------------------------------------'
 		Gbar_ab(1)=Gbar_ab(2)
 		Gbar_ab(2)=Gbar_exp
@@ -93,22 +93,22 @@ IMPLICIT NONE
 	DO WHILE ( abs(Gbar_exp/Gbar_bench-1.0_DP)>0.001_DP)
 		IF (iterGbar>1) THEN
 	        tauw0=(tauw0_upper+tauw0_lower)/2.0_DP
-	END IF
-	
-	CALL solveequilibrium(0,tauk_exp,tauw0,taul0,isbrent)
-        
-	IF (Gbar_exp>Gbar_bench) THEN
-		tauw0_upper = tauw0
-		Gbar_ab(2)=Gbar_exp
-	ELSE
-		tauw0_lower = tauw0
-		Gbar_ab(1)=Gbar_exp
-	END IF
-	print*,'Gbar_bench,Gbar_exp,tauw0,tauw0_lower,tauw0_upper'
-	print*,Gbar_bench,Gbar_exp,tauw0,tauw0_lower,tauw0_upper
-	
-	iterGbar=iterGbar+1
-	
+		END IF
+		
+		CALL solveequilibrium(0,tauk_exp,tauw0,taul0,isbrent)
+	        
+		IF (Gbar_exp>Gbar_bench) THEN
+			tauw0_upper = tauw0
+			Gbar_ab(2)=Gbar_exp
+		ELSE
+			tauw0_lower = tauw0
+			Gbar_ab(1)=Gbar_exp
+		END IF
+		print*,'Gbar_bench,Gbar_exp,tauw0,tauw0_lower,tauw0_upper'
+		print*,Gbar_bench,Gbar_exp,tauw0,tauw0_lower,tauw0_upper
+		
+		iterGbar=iterGbar+1
+		
 	END DO
 	tauw_exp=tauw0
 
@@ -976,8 +976,8 @@ IMPLICIT NONE
 		    		IF (panel_age(row,age)>0) THEN
 		    			panel_z_ind=sz(panel_s(row,age))
 		    			panel_m_ind=sm(panel_s(row,age))
-					panel_e_ind=se(panel_s(row,age))
-					panel_alpha_ind=salpha(panel_s(row,age))
+						panel_e_ind=se(panel_s(row,age))
+						panel_alpha_ind=salpha(panel_s(row,age))
 		    			! make asset choice decisions
 					IF (panel_a(row,age)<agrid(na)) THEN
 						CALL bisec(agrid,na,panel_a(row,age),xlim,ab)
@@ -1063,27 +1063,6 @@ IMPLICIT NONE
 	        	END DO
 		END DO
 			
-		DO row=1,panelN
-			tmp=RAN1(ISEED)
-			ej=1
-			rtmp=Dist_e_by_age(1,1)
-			DO WHILE (tmp>rtmp .and. ej<ne)
-				ej=ej+1
-				rtmp=SUM(Dist_e_by_age(1:ej,1))
-			END DO
-			
-			tmp=RAN1(ISEED)
-			mj=1
-			rtmp=Dist_m(1)
-			DO WHILE (tmp>rtmp .and. mj<nm)
-				mj=mj+1
-				rtmp=SUM(Dist_m(1:mj))
-			END DO
-			panel_s(row,1)=ssfun(panel_z0(row),mj,panel_alpha_end(row),ej)
-		END DO
-
-		panel_a(:,1)=panel_a_end
-		panel_age(:,1)=1
 
 		i=0
 		panel_Q_seq(iter_panel)=0.0_DP
@@ -1190,6 +1169,29 @@ IMPLICIT NONE
 				CE_newborn(iter)=CE_newborn(iter)/REAL(j,DP)	
 			END IF
 		END IF
+		
+		DO row=1,panelN
+			tmp=RAN1(ISEED)
+			ej=1
+			rtmp=Dist_e_by_age(1,1)
+			DO WHILE (tmp>rtmp .and. ej<ne)
+				ej=ej+1
+				rtmp=SUM(Dist_e_by_age(1:ej,1))
+			END DO
+			
+			tmp=RAN1(ISEED)
+			mj=1
+			rtmp=Dist_m(1)
+			DO WHILE (tmp>rtmp .and. mj<nm)
+				mj=mj+1
+				rtmp=SUM(Dist_m(1:mj))
+			END DO
+			panel_s(row,1)=ssfun(panel_z0(row),mj,panel_alpha_end(row),ej)
+		END DO
+
+		panel_a(:,1)=panel_a_end
+		panel_age(:,1)=1
+
 		iter_panel=iter_panel+1
 	END DO
 		
